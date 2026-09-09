@@ -8,9 +8,8 @@ import streamlit as st
 import core.auth as auth
 import core.db as db
 
-st.set_page_config(page_title='Admin Usuarios — Control Alimentadores MT', layout='wide')
 auth.require_login()
-auth.require_permiso('admin', 'Solo un administrador puede gestionar usuarios.')
+auth.require_pagina('admin_usuarios', para_editar=True)
 
 with st.sidebar:
     st.write(f"**{st.session_state.get('nombre')}**")
@@ -98,3 +97,54 @@ with col_der:
                 st.rerun()
     else:
         st.info('Creá al menos un usuario primero.')
+
+st.divider()
+st.subheader('Permisos por página')
+
+if not usuarios:
+    st.info('Creá al menos un usuario primero.')
+else:
+    sel_permisos = st.selectbox('Usuario', [u['username'] for u in usuarios], key='sel_permisos')
+    usuario_permisos = next(u for u in usuarios if u['username'] == sel_permisos)
+    permisos_actuales = db.get_permisos_usuario(usuario_permisos['id'])
+
+    def _aplicar_a_todas():
+        """on_change de 'Aplicar a todas': pre-carga el mismo nivel en el
+        session_state de cada radio ANTES de que la matriz se vuelva a
+        dibujar -- asi el admin puede fijar un nivel comun de una vez y
+        despues ajustar excepciones fila por fila, sin tener que marcar
+        pagina por pagina el caso comun."""
+        nivel = st.session_state.get('aplicar_todas_sel')
+        if nivel == '(sin cambio masivo)':
+            return
+        uid = next(u for u in usuarios if u['username'] == st.session_state['sel_permisos'])['id']
+        for pagina in auth.PAGINAS:
+            st.session_state[f'perm_{uid}_{pagina["id"]}'] = nivel
+
+    st.selectbox(
+        'Aplicar a todas las páginas',
+        ['(sin cambio masivo)'] + auth.NIVELES_ACCESO,
+        format_func=lambda n: n if n == '(sin cambio masivo)' else auth._NIVEL_LABEL[n],
+        key='aplicar_todas_sel', on_change=_aplicar_a_todas,
+    )
+
+    with st.form('form_permisos'):
+        nuevos_permisos = {}
+        for pagina in auth.PAGINAS:
+            widget_key = f'perm_{usuario_permisos["id"]}_{pagina["id"]}'
+            default_nivel = permisos_actuales.get(pagina['id'], 'ninguno')
+            if widget_key not in st.session_state:
+                st.session_state[widget_key] = default_nivel
+            nuevos_permisos[pagina['id']] = st.radio(
+                pagina['label'], auth.NIVELES_ACCESO,
+                format_func=lambda n: auth._NIVEL_LABEL[n],
+                horizontal=True, key=widget_key,
+            )
+        guardar_permisos = st.form_submit_button('Guardar permisos', type='primary')
+
+    if guardar_permisos:
+        db.set_permisos_usuario(usuario_permisos['id'], nuevos_permisos)
+        if usuario_permisos['id'] == st.session_state.get('usuario_id'):
+            st.session_state.pop('permisos', None)
+        st.success(f'Permisos de "{sel_permisos}" actualizados.')
+        st.rerun()

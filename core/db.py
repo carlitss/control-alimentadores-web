@@ -38,6 +38,7 @@ __all__ = [
     'get_dashboard_irregularidades_alimentador',
     'get_usuarios', 'get_usuario_by_username', 'crear_usuario',
     'actualizar_password', 'actualizar_usuario',
+    'get_permisos_usuario', 'set_permisos_usuario',
 ]
 
 
@@ -853,6 +854,34 @@ def actualizar_usuario(username, nombre=None, rol=None, activo=None):
         vals.append(username)
         conn.execute(f"UPDATE usuarios SET {', '.join(sets)} WHERE username=? COLLATE NOCASE", vals)
         conn.commit()
+    conn.close()
+
+
+# ─── PERMISOS POR PAGINA/USUARIO ───────────────────────
+def get_permisos_usuario(usuario_id):
+    """{pagina_id: nivel_acceso} para un usuario -- paginas sin fila no
+    aparecen en el dict (el default 'ninguno' lo aplica el caller, ver
+    core.auth.get_permiso)."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT pagina_id, nivel_acceso FROM permisos_usuario WHERE usuario_id=?",
+        (usuario_id,)).fetchall()
+    conn.close()
+    return {r['pagina_id']: r['nivel_acceso'] for r in rows}
+
+
+def set_permisos_usuario(usuario_id, permisos):
+    """permisos: {pagina_id: nivel_acceso}. Upsert de todas las paginas de
+    una sola vez (pedido explicito: un unico submit, no un UPDATE por
+    fila) -- borra las filas del usuario y reinserta, mas simple y
+    equivalente a un upsert masivo para esta tabla chica."""
+    conn = get_conn()
+    conn.execute("DELETE FROM permisos_usuario WHERE usuario_id=?", (usuario_id,))
+    for pagina_id, nivel in permisos.items():
+        conn.execute(
+            "INSERT INTO permisos_usuario (usuario_id, pagina_id, nivel_acceso) VALUES (?,?,?)",
+            (usuario_id, pagina_id, nivel))
+    conn.commit()
     conn.close()
 
 

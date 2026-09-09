@@ -175,16 +175,18 @@ def _inject_search_css():
     """, unsafe_allow_html=True)
 
 
-def render_grid_page(title, key_cols, cols, query_fn, search_fields=(('ALIMENTADOR', 'Alimentador'),)):
+def render_grid_page(title, key_cols, cols, query_fn, pagina_id,
+                      search_fields=(('ALIMENTADOR', 'Alimentador'),)):
     """
     title        : TITLE de insert_engine (p.ej. 'BD ALIMENTADORES')
     key_cols     : lista de columnas clave (para mostrar en encabezados)
     cols         : lista de GCol (col/key/ro/cb) en el orden a mostrar
     query_fn     : dict(search) -> list[dict]; ejecuta la consulta real
+    pagina_id    : slug de core.auth.PAGINAS -- gate de permisos de esta pagina
     search_fields: [(nombre_columna, etiqueta)] para el formulario de busqueda
     """
     _inject_search_css()
-    rol = st.session_state.get('rol')
+    puede_editar = auth.get_permiso(pagina_id) == 'edicion'
     editor_key = f'editor_{title}'
     df_key = f'df_{title}'
 
@@ -209,6 +211,17 @@ def render_grid_page(title, key_cols, cols, query_fn, search_fields=(('ALIMENTAD
                f'Clave ({", ".join(key_cols)}): solo se usa para altas nuevas — '
                'si la edita en una fila existente, el cambio se ignora.')
 
+    if not puede_editar:
+        # Solo lectura: sin data_editor ni controles de escritura -- el
+        # backend tambien rechaza el guardado igual (ver require_pagina
+        # mas abajo), esto es solo para no mostrar controles inutiles.
+        st.dataframe(df, hide_index=True, use_container_width=True,
+                     column_config=_column_config(cols))
+        st.download_button(
+            'Descargar', data=_df_to_excel_bytes(df), file_name=f'{title.replace(" ", "_")}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        return
+
     edited = st.data_editor(
         df, key=editor_key, num_rows='dynamic', hide_index=True,
         use_container_width=True, column_config=_column_config(cols),
@@ -229,7 +242,7 @@ def render_grid_page(title, key_cols, cols, query_fn, search_fields=(('ALIMENTAD
         st.rerun()
 
     if guardar:
-        auth.require_permiso('modificar', 'Tu rol no permite insertar o modificar registros.')
+        auth.require_pagina(pagina_id, para_editar=True)
         state = st.session_state[editor_key]
         raw_rows, row_numbers = [], []
         fila_num = 1
@@ -247,7 +260,7 @@ def render_grid_page(title, key_cols, cols, query_fn, search_fields=(('ALIMENTAD
 
         deleted_idx = state.get('deleted_rows', [])
         if deleted_idx:
-            auth.require_permiso('baja', 'Tu rol no permite dar de baja registros.')
+            auth.require_pagina(pagina_id, para_editar=True)
             for idx in deleted_idx:
                 row = df.iloc[idx].to_dict()
                 _, cfg_key = ie.get_cfg(title)
@@ -286,7 +299,7 @@ def render_grid_page(title, key_cols, cols, query_fn, search_fields=(('ALIMENTAD
         raw_rows = ie.rows_from_dataframe(xdf)
         st.warning(f'Se van a procesar {len(raw_rows)} fila(s) de "{excel_file.name}".')
         if st.button(f'Confirmar carga de {len(raw_rows)} fila(s)', key=f'confirmar_excel_{title}'):
-            auth.require_permiso('modificar', 'Tu rol no permite insertar o modificar registros.')
+            auth.require_pagina(pagina_id, para_editar=True)
             result = ie.bulk_upsert(title, raw_rows, st.session_state.get('username'))
             rows = query_fn(valores)
             st.session_state[df_key] = _rows_to_df(rows, cols)

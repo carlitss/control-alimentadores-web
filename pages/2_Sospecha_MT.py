@@ -4,8 +4,8 @@ import core.auth as auth
 import core.db as db
 from core.grid import col, key, ro, cb, render_grid_page
 
-st.set_page_config(page_title='Sospecha MT — Control Alimentadores MT', layout='wide')
 auth.require_login()
+auth.require_pagina('sospecha_mt')
 
 with st.sidebar:
     st.write(f"**{st.session_state.get('nombre')}**")
@@ -42,5 +42,6 @@ render_grid_page(
     key_cols=['ALIMENTADOR', 'NODO'],
     cols=COLS,
     query_fn=_query,
+    pagina_id='sospecha_mt',
     search_fields=[('ALIMENTADOR', 'Alimentador')],
 )

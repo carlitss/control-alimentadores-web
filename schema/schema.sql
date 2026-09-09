@@ -16,6 +16,20 @@ CREATE TABLE usuarios (
     creado_en TEXT DEFAULT (datetime('now'))
 );
 
+-- Permisos granulares por pagina/usuario (capa nueva, agregada junto al
+-- `rol` de arriba -- no lo reemplaza). `rol` queda para identidad/
+-- visualizacion; el gate real de cada pagina (menu + backend) pasa por
+-- aca. `pagina_id` es el slug estable definido en core/auth.PAGINAS.
+-- Sin fila para un (usuario, pagina) = 'ninguno' (principio de menor
+-- privilegio para usuarios nuevos) -- ver core/auth.get_permiso().
+CREATE TABLE permisos_usuario (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+    pagina_id TEXT NOT NULL,
+    nivel_acceso TEXT NOT NULL CHECK(nivel_acceso IN ('ninguno','lectura','edicion')),
+    UNIQUE(usuario_id, pagina_id)
+);
+
 CREATE TABLE ALIMENTADORES (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ALIMENTADOR TEXT UNIQUE NOT NULL,
