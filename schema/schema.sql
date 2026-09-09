@@ -131,6 +131,10 @@ CREATE TABLE IRREGULARIDADES (
     CONDICION_CLIENTE TEXT,
     FECHA_ASIG_INSP TEXT,
     FECHA_NORMALIZACION TEXT,
+    -- Auditado junto con el fix de SOSPECHAS_BT.PERDIDA_KWH (operando vacio
+    -- tratado como 0): NO aplica aca. Una fecha faltante no es "cero dias",
+    -- es "no se puede calcular" -- tratarla como 0 daria una diferencia de
+    -- dias falsa, no "sin dato". Se deja exigiendo ambas fechas.
     DIAS_CIERRE INTEGER GENERATED ALWAYS AS (
         CASE WHEN FECHA_NORMALIZACION IS NOT NULL AND FECHA_ASIG_INSP IS NOT NULL
         THEN CAST(julianday(FECHA_NORMALIZACION) - julianday(FECHA_ASIG_INSP) AS INTEGER)
@@ -139,6 +143,10 @@ CREATE TABLE IRREGULARIDADES (
     ESTADO_FOCALIZACION TEXT,
     RECUPERO_MWH REAL,
     MESES_CNR REAL,
+    -- Auditado junto con SOSPECHAS_BT.PERDIDA_KWH: NO aplica aca tampoco.
+    -- Es un promedio mensual (division) -- sin RECUPERO_MWH o sin MESES_CNR
+    -- no hay tasa que calcular ("sin dato" real), tratar cualquiera de los
+    -- dos como 0 daria una tasa falsa (0 o division por cero ya evitada).
     RECUPERO_MWH_MES REAL GENERATED ALWAYS AS (
         CASE WHEN MESES_CNR IS NOT NULL AND MESES_CNR != 0 AND RECUPERO_MWH IS NOT NULL
         THEN ROUND(RECUPERO_MWH / MESES_CNR, 4) ELSE NULL END
@@ -204,14 +212,22 @@ CREATE TABLE SOSPECHAS_BT (
     MEDIDOR_TOTALIZADOR TEXT,
     CONSUMO_TOTALIZADOR REAL,
     CONSUMO_CLIENTES REAL,
+    -- CONSUMO_CLIENTES vacio se trata como 0 (regla de negocio: un SED sin
+    -- clientes informados igual tiene perdida = todo el consumo del
+    -- totalizador). CONSUMO_TOTALIZADOR si sigue siendo obligatorio -- sin
+    -- el total no hay nada que calcular, a diferencia de sin clientes.
+    -- VIRTUAL (no STORED): SQLite no permite agregar una columna STORED via
+    -- ALTER TABLE a una tabla con filas (probado en produccion, 1935 filas,
+    -- fallo con "cannot add a STORED column"); VIRTUAL se calcula al leer,
+    -- sin backfill, y funciona igual en una tabla vacia o poblada.
     PERDIDA_KWH REAL GENERATED ALWAYS AS (
-        CASE WHEN CONSUMO_TOTALIZADOR IS NOT NULL AND CONSUMO_CLIENTES IS NOT NULL
-        THEN ROUND(CONSUMO_TOTALIZADOR - CONSUMO_CLIENTES, 2) ELSE NULL END
-    ) STORED,
+        CASE WHEN CONSUMO_TOTALIZADOR IS NOT NULL
+        THEN ROUND(CONSUMO_TOTALIZADOR - COALESCE(CONSUMO_CLIENTES, 0), 2) ELSE NULL END
+    ) VIRTUAL,
     PERDIDA_PCT REAL GENERATED ALWAYS AS (
-        CASE WHEN CONSUMO_TOTALIZADOR IS NOT NULL AND CONSUMO_TOTALIZADOR != 0 AND CONSUMO_CLIENTES IS NOT NULL
-        THEN ROUND((CONSUMO_TOTALIZADOR - CONSUMO_CLIENTES) / CONSUMO_TOTALIZADOR * 100, 2) ELSE NULL END
-    ) STORED,
+        CASE WHEN CONSUMO_TOTALIZADOR IS NOT NULL AND CONSUMO_TOTALIZADOR != 0
+        THEN ROUND((CONSUMO_TOTALIZADOR - COALESCE(CONSUMO_CLIENTES, 0)) / CONSUMO_TOTALIZADOR * 100, 2) ELSE NULL END
+    ) VIRTUAL,
     ESTADO_ACTIVIDAD TEXT,
     ESTADO_FOCALIZACION TEXT,
     -- Agregadas para el segmento "Analisis de alimentadores por nodos BT"
