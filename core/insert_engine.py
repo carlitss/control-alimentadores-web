@@ -136,6 +136,13 @@ CONFIGS = {
         'key_cols':  ['KEY'],
         'mandatory': ['ALIMENTADOR', 'NODO', 'KEY'],
         'needs_alim': True,
+        # No rechazar la fila si ALIMENTADOR no esta en el maestro (a
+        # diferencia del resto de tablas): queda igual con
+        # alimentador_id=NULL, y ORIGEN documenta el caso -- ver
+        # prepare_row y los triggers trg_irr_ins/trg_irr_upd/
+        # trg_alim_ins_origen en schema.sql.
+        'alim_opcional': True,
+        'computed_cols': {'ORIGEN'},
         'auto_inst': False,
         'catalogos': {
             'ESTADO_FOCALIZACION': 'ESTADO_FOCAL',
@@ -362,9 +369,16 @@ def prepare_row(tab_title, raw, usuario='', caches=None, conn=None):
                 caches[cache_key] = db.get_alimentador_by_codigo(alim, conn)
             alim_row = caches[cache_key]
             if not alim_row:
-                errors.append(
-                    f'ALIMENTADOR: "{alim}" no encontrado en el maestro de alimentadores'
-                )
+                if cfg.get('alim_opcional'):
+                    # No es un error: la fila se guarda igual, sin vinculo
+                    # al maestro. ORIGEN lo completa el trigger
+                    # trg_irr_ins/trg_irr_upd (no se setea aca a mano para
+                    # que haya una unica fuente de verdad del calculo).
+                    clean['alimentador_id'] = None
+                else:
+                    errors.append(
+                        f'ALIMENTADOR: "{alim}" no encontrado en el maestro de alimentadores'
+                    )
             else:
                 clean['alimentador_id'] = alim_row['id']
 

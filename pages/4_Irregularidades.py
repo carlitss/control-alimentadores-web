@@ -20,6 +20,7 @@ st.title('BD Irregularidades')
 
 COLS = [
     key('ALIMENTADOR',         'ALIMENTADOR'),
+    ro ('ORIGEN',              'ORIGEN'),
     col('NODO',                'NODO', 'int'),
     key('KEY',                 'KEY'),
     col('SUM_CLIENTE',         'SUM', 'int'),
