@@ -1,7 +1,8 @@
 """Pagina Irregularidades — portada de TabIrregularidades en app/main.py.
-Clave real (CONCA) no coincide con ambas columnas 'key' mostradas (ALIMENTADOR
-tambien se marca key por consistencia visual con la app de escritorio, pero
-insert_engine.CONFIGS['IRREGULARIDADES']['key_cols'] es solo ['CONCA'])."""
+Clave real (KEY, ex CONCA) no coincide con ambas columnas 'key' mostradas
+(ALIMENTADOR tambien se marca key por consistencia visual con la app de
+escritorio, pero insert_engine.CONFIGS['IRREGULARIDADES']['key_cols'] es
+solo ['KEY'])."""
 import streamlit as st
 import core.auth as auth
 import core.db as db
@@ -20,7 +21,7 @@ st.title('BD Irregularidades')
 COLS = [
     key('ALIMENTADOR',         'ALIMENTADOR'),
     col('NODO',                'NODO', 'int'),
-    key('CONCA',               'CONCA'),
+    key('KEY',                 'KEY'),
     col('SUM_CLIENTE',         'SUM', 'int'),
     col('CONDICION_CLIENTE',   'CONDICION'),
     col('FECHA_NORMALIZACION', 'FECHA NORMAL.', 'date'),
@@ -53,7 +54,7 @@ def _query(search):
 
 render_grid_page(
     title='BD IRREGULARIDADES',
-    key_cols=['CONCA'],
+    key_cols=['KEY'],
     cols=COLS,
     query_fn=_query,
     search_fields=[('ALIMENTADOR', 'Alimentador')],

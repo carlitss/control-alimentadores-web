@@ -16,6 +16,17 @@ import re
 from datetime import datetime
 import core.db as db
 
+# Columnas cuyo nombre real coincide con una palabra reservada de SQL (hoy
+# solo IRREGULARIDADES."KEY", ex CONCA) -- el SQL generado dinamicamente en
+# este modulo (listas de columnas para INSERT/UPDATE/WHERE) debe citarlas
+# entre comillas dobles o el parser de SQLite puede confundirlas con la
+# palabra clave en vez de un nombre de columna.
+_SQL_RESERVED = frozenset({'KEY'})
+
+
+def _qcol(col):
+    return f'"{col}"' if col in _SQL_RESERVED else col
+
 # ─── Columnas que NUNCA van en INSERT ────────────────────────────
 AUDIT_COLS = frozenset({
     'id', 'alimentador_id',
@@ -122,8 +133,8 @@ CONFIGS = {
     },
     'IRREGULARIDADES': {
         'db_table':  'IRREGULARIDADES',
-        'key_cols':  ['CONCA'],
-        'mandatory': ['ALIMENTADOR', 'NODO', 'CONCA'],
+        'key_cols':  ['KEY'],
+        'mandatory': ['ALIMENTADOR', 'NODO', 'KEY'],
         'needs_alim': True,
         'auto_inst': False,
         'catalogos': {
@@ -278,7 +289,7 @@ def exists_in_db(cfg_key, row, conn=None):
     if any(v is None or str(v).strip() == '' for v in vals):
         return False
     where_parts = [
-        f'{k}=?' if k in _INT_KEY_COLS else f'{k}=? COLLATE NOCASE'
+        f'{_qcol(k)}=?' if k in _INT_KEY_COLS else f'{_qcol(k)}=? COLLATE NOCASE'
         for k in key_cols
     ]
     where = ' AND '.join(where_parts)
@@ -405,7 +416,7 @@ def get_row_by_key(cfg_key, row, conn=None):
     if any(v is None or str(v).strip() == '' for v in vals):
         return None
     where_parts = [
-        f'{k}=?' if k in _INT_KEY_COLS else f'{k}=? COLLATE NOCASE'
+        f'{_qcol(k)}=?' if k in _INT_KEY_COLS else f'{_qcol(k)}=? COLLATE NOCASE'
         for k in key_cols
     ]
     where = ' AND '.join(where_parts)
@@ -532,7 +543,7 @@ def bulk_upsert(tab_title, raw_rows, usuario, row_numbers=None):
                     cols = list(insert_vals.keys())
                     ph   = ', '.join(['?'] * len(cols))
                     conn.execute(
-                        f'INSERT INTO {cfg["db_table"]} ({", ".join(cols)}) VALUES ({ph})',
+                        f'INSERT INTO {cfg["db_table"]} ({", ".join(_qcol(c) for c in cols)}) VALUES ({ph})',
                         [insert_vals[c] for c in cols])
                     conn.commit()
                     result['insertados'] += 1
@@ -548,7 +559,7 @@ def bulk_upsert(tab_title, raw_rows, usuario, row_numbers=None):
                         columnas_reales = sorted(changes.keys())
                         changes['MODIFICADO_POR']     = usuario
                         changes['FECHA_MODIFICACION'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        sets = ', '.join(f'{c}=?' for c in changes)
+                        sets = ', '.join(f'{_qcol(c)}=?' for c in changes)
                         conn.execute(
                             f'UPDATE {cfg["db_table"]} SET {sets} WHERE id=?',
                             list(changes.values()) + [existing['id']])

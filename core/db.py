@@ -101,11 +101,11 @@ def get_irregularidades_all(alimentador=''):
     conn = get_conn()
     if alimentador:
         rows = conn.execute(
-            "SELECT * FROM IRREGULARIDADES WHERE ALIMENTADOR=? COLLATE NOCASE ORDER BY ALIMENTADOR, CONCA",
+            'SELECT * FROM IRREGULARIDADES WHERE ALIMENTADOR=? COLLATE NOCASE ORDER BY ALIMENTADOR, "KEY"',
             (alimentador,)).fetchall()
     else:
         rows = conn.execute(
-            "SELECT * FROM IRREGULARIDADES ORDER BY ALIMENTADOR, CONCA").fetchall()
+            'SELECT * FROM IRREGULARIDADES ORDER BY ALIMENTADOR, "KEY"').fetchall()
     conn.close()
     return rows_to_list(rows)
 
@@ -312,9 +312,9 @@ def editar_sospecha_bt(sid, data, usuario):
 
 
 # ─── IRREGULARIDADES ──────────────────────────────────
-def get_irregularidad_by_key(conca):
+def get_irregularidad_by_key(key):
     conn = get_conn()
-    row = conn.execute('SELECT * FROM IRREGULARIDADES WHERE CONCA=?', (conca,)).fetchone()
+    row = conn.execute('SELECT * FROM IRREGULARIDADES WHERE "KEY"=?', (key,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
@@ -324,7 +324,7 @@ def get_irregularidades(alimentador):
     rows = conn.execute("""
         SELECT * FROM IRREGULARIDADES
         WHERE ALIMENTADOR=? AND ESTADO_REGISTRO='ALTA'
-        ORDER BY NODO, CONCA
+        ORDER BY NODO, "KEY"
     """, (alimentador,)).fetchall()
     conn.close()
     return rows_to_list(rows)
@@ -343,7 +343,7 @@ def crear_irregularidad(data, usuario):
         return cur.lastrowid, None
     except TursoError as e:
         if _is_unique_violation(e):
-            return None, 'Ya existe una irregularidad con ese CONCA.'
+            return None, 'Ya existe una irregularidad con esa KEY.'
         raise
     finally:
         conn.close()

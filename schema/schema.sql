@@ -121,7 +121,12 @@ CREATE TABLE IRREGULARIDADES (
     alimentador_id INTEGER NOT NULL REFERENCES ALIMENTADORES(id),
     ALIMENTADOR TEXT NOT NULL,
     NODO INTEGER NOT NULL,
-    CONCA TEXT NOT NULL UNIQUE,
+    -- Ex CONCA, renombrada a KEY (pedido explicito) -- es la clave real de
+    -- esta tabla, viene tal cual del Excel origen (no se deriva en este
+    -- pipeline), por eso es estable entre cargas. "KEY" es palabra
+    -- reservada de SQL: toda referencia en el codigo la cita entre
+    -- comillas dobles.
+    "KEY" TEXT NOT NULL UNIQUE,
     SUM_CLIENTE INTEGER,
     COD_PUNTO_MEDICION TEXT,
     CATEGORIA TEXT,
