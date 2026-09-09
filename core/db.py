@@ -736,67 +736,58 @@ def get_dashboard_bt_status_conteo(meses):
 
 
 def get_dashboard_irregularidades_bt(meses):
-    """2.4: 'Analisis de irregularidades BT' -- IRREGULARIDADES con
-    TENSION='BT' y ESTADO_CNR vacio, agrupado por ESTADO_CNR (en la
-    practica un unico grupo: el vacio). Conteo de SED/CLIENTE MT, Suma de
-    RECUPERO [MWh].
-
-    'SED/CLIENTE MT' del Excel maestro ya se migraba a COD_PUNTO_MEDICION
-    (ver app/2_migrar_datos.py) -- no es una columna nueva. La columna
-    SED_CLIENTE_MT agregada inicialmente para esto era redundante y se
-    elimino (ver validacion previa a la Fase 7)."""
+    """Tabla v1 'Analisis de irregularidades BT' (por SED/cliente) --
+    redefinida por completo (reemplaza la version anterior de esta funcion,
+    que filtraba distinto). IRREGULARIDADES con TENSION='BT' o TENSION
+    vacia (ambos casos incluidos), agrupado por ESTADO_CNR limitado a
+    'NO PROCEDE' y 'VALORIZADO' (se excluye cualquier otro valor). Cuenta
+    de COD_PUNTO_MEDICION (mostrado en el dashboard como 'SED_CLIENTE_MT' --
+    es un rename de presentacion, la columna real sigue siendo
+    COD_PUNTO_MEDICION; 'SED/CLIENTE MT' del Excel ya se migraba ahi, ver
+    app/2_migrar_datos.py), y suma de RECUPERO_MWH."""
     if not meses:
         return []
     conn = get_conn()
     ph = ','.join(['?'] * len(meses))
     rows = conn.execute(f"""
-        SELECT NULLIF(TRIM(i.ESTADO_CNR),''), COUNT(i.COD_PUNTO_MEDICION), SUM(i.RECUPERO_MWH)
+        SELECT i.ESTADO_CNR, COUNT(i.COD_PUNTO_MEDICION), SUM(i.RECUPERO_MWH)
         FROM IRREGULARIDADES i
         JOIN ALIMENTADORES a ON UPPER(i.ALIMENTADOR)=UPPER(a.ALIMENTADOR)
         WHERE a.MES_PLANIFICADO IN ({ph}) AND a.ESTADO_REGISTRO='ALTA'
-        AND UPPER(i.TENSION)='BT'
-        AND (i.ESTADO_CNR IS NULL OR TRIM(i.ESTADO_CNR)='')
+        AND (UPPER(i.TENSION)='BT' OR i.TENSION IS NULL OR TRIM(i.TENSION)='')
+        AND UPPER(i.ESTADO_CNR) IN ('NO PROCEDE', 'VALORIZADO')
         GROUP BY 1
     """, list(meses)).fetchall()
     conn.close()
-    return [{'estado_cnr': r[0] or '(pendiente)', 'conteo': r[1] or 0,
+    return [{'estado_cnr': r[0], 'sed_cliente_mt': r[1] or 0,
              'recupero_mwh': r[2] or 0} for r in rows]
 
 
-# Categorias de ESTADO_CNR que se muestran como columnas en 2.5 (el pedido
-# original tambien decia "ESTADO CNR vacio" en el filtro de esta tabla,
-# pero eso es incompatible con mostrar columnas NO PROCEDE/VALORIZADO -- no
-# habria ninguna fila que cumpla ambas cosas a la vez. Se siguio la imagen
-# de referencia adjunta, que es inequivoca: sin filtro de vacio, columnas
-# NO PROCEDE y VALORIZADO con datos reales).
-_ESTADOS_CNR_2_5 = ['NO PROCEDE', 'VALORIZADO']
-
-
 def get_dashboard_irregularidades_alimentador(meses):
-    """2.5: 'Analisis de irregularidades por alimentador' -- IRREGULARIDADES
-    con TIPO_CLIENTE='SED', pivotado ALIMENTADOR (filas) x ESTADO_CNR en
-    (NO PROCEDE, VALORIZADO) (columnas), con Conteo de SUM y Suma de
-    RECUPERO [MWh] por celda -- misma estructura que la imagen de
-    referencia del usuario."""
+    """Tabla v2 'Analisis de irregularidades BT' (por alimentador) --
+    IRREGULARIDADES con TIPO_CLIENTE='SED' o TIPO_CLIENTE vacio (ambos
+    casos incluidos), pivotado ALIMENTADOR (filas) x ESTADO_CNR (columnas,
+    SIN restringir a una lista fija -- a diferencia de la v1, aca se
+    muestran todos los valores de ESTADO_CNR que existan en los datos).
+    Conteo de SUM_CLIENTE y suma de RECUPERO_MWH por celda."""
     if not meses:
         return {}
     conn = get_conn()
     ph = ','.join(['?'] * len(meses))
-    estados_ph = ','.join(['?'] * len(_ESTADOS_CNR_2_5))
     rows = conn.execute(f"""
         SELECT i.ALIMENTADOR, i.ESTADO_CNR, COUNT(i.SUM_CLIENTE), SUM(i.RECUPERO_MWH)
         FROM IRREGULARIDADES i
         JOIN ALIMENTADORES a ON UPPER(i.ALIMENTADOR)=UPPER(a.ALIMENTADOR)
         WHERE a.MES_PLANIFICADO IN ({ph}) AND a.ESTADO_REGISTRO='ALTA'
-        AND UPPER(i.TIPO_CLIENTE)='SED'
-        AND UPPER(i.ESTADO_CNR) IN ({estados_ph})
+        AND (UPPER(i.TIPO_CLIENTE)='SED' OR i.TIPO_CLIENTE IS NULL OR TRIM(i.TIPO_CLIENTE)='')
         GROUP BY i.ALIMENTADOR, i.ESTADO_CNR
         ORDER BY i.ALIMENTADOR
-    """, list(meses) + _ESTADOS_CNR_2_5).fetchall()
+    """, list(meses)).fetchall()
     conn.close()
     pivot = {}
     for alim, estado, cnt, suma in rows:
-        pivot.setdefault(alim, {})[estado] = {'conteo': cnt or 0, 'recupero_mwh': suma or 0}
+        estado_label = estado if (estado and str(estado).strip()) else '(sin dato)'
+        pivot.setdefault(alim, {})[estado_label] = {'conteo': cnt or 0, 'recupero_mwh': suma or 0}
     return pivot
 
 

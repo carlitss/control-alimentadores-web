@@ -204,11 +204,6 @@ def _donut(segments):
     </div>"""
 
 
-# Categorias de ESTADO_CNR mostradas como columnas en la tabla 2.5 (debe
-# coincidir con core.db._ESTADOS_CNR_2_5).
-_ESTADOS_CNR_2_5 = ['NO PROCEDE', 'VALORIZADO']
-
-
 def _focal_table(data):
     if not data:
         return '<div class="empty-state">Sin datos</div>'
@@ -249,28 +244,34 @@ def _status_conteo_table(data, total):
 
 
 def _irreg_bt_table(data):
+    """v1 'Analisis de irregularidades BT' (por SED/cliente): filas =
+    ESTADO_CNR (limitado a NO PROCEDE/VALORIZADO en la query de origen),
+    medidas = cuenta de SED_CLIENTE_MT (rename de presentacion de
+    COD_PUNTO_MEDICION) y suma de RECUPERO_MWH."""
     if not data:
         return '<div class="empty-state">Sin datos</div>'
     rows = ''.join(
         f"""<tr><td>{_esc(d['estado_cnr'])}</td>
-        <td class="num">{d['conteo']}</td>
+        <td class="num">{d['sed_cliente_mt']}</td>
         <td class="num">{d['recupero_mwh']:,.2f}</td></tr>"""
         for d in data
     )
     return f"""<div class="table-scroll"><table>
-      <thead><tr><th>Estado CNR</th><th class="num">Conteo SED/CLIENTE MT</th>
+      <thead><tr><th>Estado CNR</th><th class="num">Cuenta SED/cliente MT</th>
       <th class="num">Recupero [MWh]</th></tr></thead>
       <tbody>{rows}</tbody>
     </table></div>"""
 
 
 def _irreg_alim_table(pivot):
-    """Tabla 2.5, misma estructura que la imagen de referencia: ALIMENTADOR
-    x (NO PROCEDE, VALORIZADO), con Cuenta de SUM y Suma de RECUPERO [MWh]
-    por estado, mas columnas de total y fila de total general."""
+    """v2 'Analisis de irregularidades BT' (por alimentador): filas =
+    ALIMENTADOR, columnas = ESTADO_CNR (dinamicas -- todos los valores
+    presentes en los datos, sin restringir a una lista fija), con Cuenta
+    de SUM_CLIENTE y Suma de RECUPERO_MWH por estado, mas columnas de
+    total y fila de total general."""
     if not pivot:
         return '<div class="empty-state">Sin datos</div>'
-    estados = _ESTADOS_CNR_2_5
+    estados = sorted({e for cells in pivot.values() for e in cells})
     alimentadores = sorted(pivot.keys())
     tot_conteo = {e: 0 for e in estados}
     tot_recup = {e: 0.0 for e in estados}
@@ -354,7 +355,7 @@ def render_bt_segment(kbt, focal, status_data, status_total, irreg_bt, irreg_ali
 
     <div class="grid-2b">
       <div class="card">
-        <div class="card-head"><h3>Análisis de irregularidades BT</h3><span>Tensión BT · CNR vacío</span></div>
+        <div class="card-head"><h3>Análisis de irregularidades BT</h3><span>Tensión BT · CNR: no procede/valorizado</span></div>
         {_irreg_bt_table(irreg_bt)}
       </div>
       <div class="card">
